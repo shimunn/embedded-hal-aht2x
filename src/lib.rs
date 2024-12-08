@@ -39,6 +39,10 @@ impl HumidityData {
         let frac = mille % div;
         (percent as _, frac as _)
     }
+    #[cfg(feature = "float")]
+    pub fn relative_f32(&self) -> f32 {
+        self.relative_mille() as f32 * 1000
+    }
 }
 
 impl Display for HumidityData {
@@ -70,6 +74,10 @@ impl TemperatureData {
         let int = milli.div_floor(1000);
         let frac = milli % 1000;
         (int as _, frac as _)
+    }
+    #[cfg(feature = "float")]
+    pub fn celsius_f32(&self) -> f32 {
+        self.milli_celsius() as f32 * 1000
     }
 }
 

@@ -15,3 +15,4 @@ embedded-hal-async = "1.0.0"
 default = ["crc"]
 crc = ["dep:crc"]
 defmt = ["dep:defmt"]
+float = []
