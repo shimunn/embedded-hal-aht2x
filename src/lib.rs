@@ -1,4 +1,4 @@
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 #![feature(int_roundings)]
 use core::fmt::{Debug, Display};
 use core::marker::PhantomData;
@@ -252,9 +252,6 @@ fn calc_crc(resp: &[u8]) -> u8 {
     digest.update(resp);
     digest.finalize()
 }
-
-#[cfg(test)]
-extern crate std;
 
 #[cfg(test)]
 mod tests {
