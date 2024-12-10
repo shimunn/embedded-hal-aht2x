@@ -259,13 +259,15 @@ mod tests {
 
     #[test]
     fn status() {
-        assert!(Status(158).is_busy())
+        assert!(Status(159).is_busy())
     }
 
     #[test]
     fn parse_measurement() {
         let resp: [u8; 5] = [111, 65, 133, 170, 130];
         let hum = HumidityData::from_bytes(resp[..3].try_into().unwrap());
-        let temp = TemperatureData::from_bytes(resp[3..].try_into().unwrap());
+        assert_eq!(hum.relative(), (21, 7));
+        let temp = TemperatureData::from_bytes(resp[2..].try_into().unwrap());
+        assert_eq!(temp.celsius(), (20, 825));
     }
 }
