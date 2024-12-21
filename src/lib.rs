@@ -15,6 +15,22 @@ pub const MEASURE_TIME_MS: u32 = 80;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct Measurement(pub [u8; 5]);
+
+impl Measurement {
+    pub fn split(self) -> (TemperatureData, HumidityData) {
+        let mut padded = [0u8; 8];
+        padded[..5].copy_from_slice(&self.0[..]);
+        let bits = u64::from_be_bytes(padded) >> 24;
+        let temp_mask = !((!0u64) << 20);
+        let raw_temp = (bits & temp_mask) as u32;
+        let raw_hum = ((bits & (temp_mask << 20)) >> 20) as u32;
+        (TemperatureData(raw_temp), HumidityData(raw_hum))
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct HumidityData(u32);
 
 impl HumidityData {
@@ -98,7 +114,6 @@ enum StatusBits {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Status(u8);
 
 impl Status {
@@ -117,17 +132,45 @@ impl Status {
     pub fn is_fido_full(&self) -> bool {
         self.0 & (StatusBits::FifoFull as u8) > 0
     }
+
+    fn fields(self) -> [(&'static str, bool); 5] {
+        [
+            ("busy", self.is_busy()),
+            ("calibrated", self.is_calibrated()),
+            ("calibrating", self.is_calibration_on()),
+            ("fifo on", self.is_fifo_on()),
+            ("fifo full", self.is_fido_full()),
+        ]
+    }
 }
 
 impl Debug for Status {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("Status")
-            .field("busy", &self.is_busy())
-            .field("calibrated", &self.is_calibrated())
-            .field("calibration on", &self.is_calibration_on())
-            .field("fifo on", &self.is_fifo_on())
-            .field("fifo full", &self.is_fido_full())
-            .finish()
+        let mut s = f.debug_struct("Status");
+        for (field, value) in self.fields() {
+            s.field(field, &value);
+        }
+        s.finish()
+    }
+}
+#[cfg(feature = "defmt")]
+impl defmt::Format for Status {
+    fn format(&self, fmt: defmt::Formatter) {
+        let fields = self.fields();
+        defmt::write!(
+            fmt,
+            "Status {}: {}, {}: {}, {}: {}, {}: {}, {}: {}",
+            fields[0].0,
+            fields[0].1,
+            fields[1].0,
+            fields[1].1,
+            fields[2].0,
+            fields[2].1,
+            fields[3].0,
+            fields[3].1,
+            fields[4].0,
+            fields[4].1
+        );
     }
 }
 
@@ -196,13 +239,15 @@ impl<T: I2c> Aht2X<T> {
         let mut status = Status(0);
         self.read(interface, core::slice::from_mut(&mut status.0))
             .await?;
+        #[cfg(feature = "defmt")]
+        defmt::trace!("{}", status);
         Ok(status)
     }
     pub async fn measure<'a>(
         &mut self,
         interface: &mut T,
         delay: &mut impl DelayNs,
-    ) -> Result<(HumidityData, TemperatureData), T::Error> {
+    ) -> Result<Measurement, T::Error> {
         delay.delay_ms(100).await;
         let mut resp = [0u8; if cfg!(feature = "crc") { 7 } else { 6 }];
         self.write(interface, Aht2xCommand::Measure, &[0x33, 0x00])
@@ -213,17 +258,15 @@ impl<T: I2c> Aht2X<T> {
             let full_resp = &resp[..];
             let resp = full_resp;
             let state = Status(resp[0]);
-            let resp = &resp[1..];
             #[cfg(feature = "defmt")]
-            defmt::debug!("{:?} {}", state, state.is_busy());
+            defmt::trace!("{}", state);
+            let resp = &resp[1..];
             if state.is_busy() {
                 continue;
             }
-            let humidity = HumidityData::from_bytes(resp[..3].try_into().unwrap());
-            let resp = &resp[2..];
-            let temperature = TemperatureData::from_bytes(resp[..3].try_into().unwrap());
+            let measure = Measurement(resp[..5].try_into().unwrap());
             #[allow(unused)]
-            let resp = &resp[3..];
+            let resp = &resp[5..];
             #[cfg(feature = "crc")]
             let _ = {
                 let digest = calc_crc(&full_resp[..6]);
@@ -238,9 +281,7 @@ impl<T: I2c> Aht2X<T> {
                 }
                 &resp[1..]
             };
-            #[cfg(feature = "defmt")]
-            defmt::debug!("temperature: {:?}, humidity: {:?}", temperature, humidity);
-            break Ok((humidity, temperature));
+            break Ok(measure);
         }
     }
 }
@@ -257,17 +298,18 @@ fn calc_crc(resp: &[u8]) -> u8 {
 mod tests {
     use super::*;
 
+    const RESPONSE_DATA: [u8; 5] = [111, 65, 133, 170, 130];
+
     #[test]
     fn status() {
         assert!(Status(159).is_busy())
     }
 
     #[test]
-    fn parse_measurement() {
-        let resp: [u8; 5] = [111, 65, 133, 170, 130];
-        let hum = HumidityData::from_bytes(resp[..3].try_into().unwrap());
+    fn measurement_split() {
+        let measure = Measurement(RESPONSE_DATA);
+        let (temp, hum) = measure.split();
         assert_eq!(hum.relative(), (21, 7));
-        let temp = TemperatureData::from_bytes(resp[2..].try_into().unwrap());
         assert_eq!(temp.celsius(), (20, 825));
     }
 }

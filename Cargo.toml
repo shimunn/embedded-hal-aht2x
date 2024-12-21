@@ -1,7 +1,7 @@
 [package]
 name = "embedded-hal-aht2x"
 authors = [ "shimun <shimun@shimun.net>" ]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MPL-2.0"
 description = "Driver for the AHT2x temperature and humidity sensor based on embedded-hal-async"

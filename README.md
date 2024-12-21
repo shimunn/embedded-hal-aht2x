@@ -12,7 +12,7 @@ let delay = unimplemented!();
 
 let sensor = Aht2X::setup(&mut ic2, &mut delay).await?;
 
-let (humidity, temperature) = sensor.measure(&mut ic2, &mut delay).await?; 
+let (humidity, temperature) = sensor.measure(&mut ic2, &mut delay).await?.split(); 
 
 println!("temperature: {}.{}C", temperature.celsius().0, temperature.celsius().1);
 ```
