@@ -41,7 +41,7 @@ impl HumidityData {
     }
     #[cfg(feature = "float")]
     pub fn relative_f32(&self) -> f32 {
-        self.relative_mille() as f32 * 1000
+        self.relative_mille() as f32 * 1000.0
     }
 }
 
@@ -77,7 +77,7 @@ impl TemperatureData {
     }
     #[cfg(feature = "float")]
     pub fn celsius_f32(&self) -> f32 {
-        self.milli_celsius() as f32 * 1000
+        self.milli_celsius() as f32 * 1000.0
     }
 }
 
